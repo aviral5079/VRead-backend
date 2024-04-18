@@ -29,7 +29,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -99,39 +99,17 @@ async def upload_pdf(
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/uploadManual/pdf/")
+@app.post("/createManualMindmap")
 async def upload_pdf(
     user_id: str = Query(..., description="User ID"),
-    pdf_file: UploadFile = File(...),
+    pdf_file_id: str = Query(..., description="Pdf File ID"),
     page_numbers: List[int] = Query(..., description="Array of page numbers")
 ):
 
     try:
-
-        user_folder_path = f"{cfg.user_folder_path}/{user_id}"
-        Utils.set_db_path(user_folder_path)
-
-        if not os.path.exists(user_folder_path):
-            os.makedirs(user_folder_path)
-
-        pdf_file_id = f"{user_id}_{pdf_file.filename}"
         user_upload_folder = f"uploads/{user_id}"
 
-        if not os.path.exists(user_upload_folder):
-            os.makedirs(user_upload_folder)
-
         uploaded_file_path = f"{user_upload_folder}/{pdf_file_id}"
-        with open(uploaded_file_path, "wb") as file:
-            file.write(pdf_file.file.read())
-
-        if user_id not in uploaded_pdfs:
-            uploaded_pdfs[user_id] = []
-        uploaded_pdfs[user_id].append(
-            {
-                "pdf_id": pdf_file_id,
-                "file_path": uploaded_file_path,
-            }
-        )
         ingest.create_vector_database(user_id)
 
         importlib.reload(backend)
