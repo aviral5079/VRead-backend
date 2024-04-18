@@ -382,16 +382,29 @@ class minePdfFile:
         for edge in edges_list:
             parent_id = edge["parent_id"]
             child_id = edge["child_id"]
-
+                
             # If a node is a parent, update its type to "title"
             if node_list[parent_id] and node_list[parent_id]["data"]["text"]:
                 node_list[parent_id]["data"]["cursor"] = parent_id
                 node_list[parent_id]["data"]["title"] = node_list[parent_id]["data"]["text"]
                 node_list[parent_id]["data"]["text"] = ""
+                
+        filtered_edges = []
+        for edge in edges_list:
+            if edge["parent_id"] != edge["child_id"]:
+                filtered_edges.append(edge)
 
-        return node_list, edges_list
+        return node_list, filtered_edges
 
-    def extract_lines_by_id_recursive(self, graph, edges, node_id):
+    def extract_lines_by_id_recursive(self, graph, edges, node_id, visited=None):
+        if visited is None:
+            visited = set()
+
+        if node_id in visited:
+            return ""
+
+        visited.add(node_id)
+
         node_content = ""
         node = graph.get(node_id, None)
 
@@ -408,24 +421,28 @@ class minePdfFile:
             children_ids = [
                 edge["child_id"] for edge in edges if edge["parent_id"] == node_id
             ]
+            
+            if not children_ids:
+                return node_content
+            
             for child_id in children_ids:
-                child_content = self.extract_lines_by_id_recursive(
-                    graph, edges, child_id
-                )
-                node_content += (
-                    " " + child_content
-                )  # Concatenate child content with space
-
+                if child_id in graph:
+                    child_content = self.extract_lines_by_id_recursive(
+                        graph, edges, child_id, visited
+                    )
+                    node_content += (
+                        " " + child_content
+                    )
         return node_content
 
     def extract_lines_by_id_and_children(self, node_id):
-        # Check if the graph and edges are available
+        
         if self.nodes is None or self.edges is None:
             log_error("Graph or edges not available.")
             return None
-
-        # Call the recursive function to get content of node and its children
-        content = self.extract_lines_by_id_recursive(self.nodes, self.edges, node_id)
+        
+        visited = set()
+        content = self.extract_lines_by_id_recursive(self.nodes, self.edges, node_id, visited)
         return content
 
     def get_node_summary(self, node_content):
