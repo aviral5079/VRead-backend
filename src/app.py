@@ -33,7 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-pdf_processor = minePdfFile()
 word_counter = WordCounter()
 pdf_processor_by_pdfid = {}
 uploaded_pdfs: Dict[str, list] = {}
@@ -72,6 +71,8 @@ async def upload_pdf(
             }
         )
         ingest.create_vector_database(user_id)
+        
+        pdf_processor = minePdfFile()
 
         importlib.reload(backend)
         pdf_processor.extract_and_convert(uploaded_file_path)
@@ -112,9 +113,9 @@ async def upload_pdf(
         uploaded_file_path = f"{user_upload_folder}/{pdf_file_id}"
         ingest.create_vector_database(user_id)
 
+        pdf_processor = pdf_processor_by_pdfid[pdf_file_id];
         importlib.reload(backend)
         pdf_processor.extract_and_convert_manual(uploaded_file_path, page_numbers)
-
         pdf_processor_by_pdfid[pdf_file_id] = pdf_processor
 
         return {
@@ -138,6 +139,29 @@ async def upload_pdf(
         )
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/getDocuments")
+async def get_documents(
+    user_id: str = Query(..., description="User ID"),
+):
+    try:
+        uploaded_docs = uploaded_pdfs.get(user_id, [])
+        return {"uploaded_pdfs": uploaded_docs}
+    
+    except HTTPException as e:
+        log_error("Upload File and Mindmap Creation Failed")
+        log_debug(
+            f"Module Name : {__name__},Function Name : {sys._getframe().f_code.co_name}"
+        )
+
+        raise e
+
+    except Exception as e:
+        log_critical("Error in getting documents")
+        log_debug(
+            f"Module Name : {__name__}, Function Name : {sys._getframe().f_code.co_name}, Error: {str(e)}"
+        )
+        raise HTTPException(status_code=500, detail="Error in getting documents")
+    
 
 @app.get("/queryResponse")
 async def query_response(
