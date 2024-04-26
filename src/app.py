@@ -188,7 +188,7 @@ async def get_documents(
         user_folder_path = os.path.join(parent_directory, user_upload_folder)
 
         if not os.path.exists(user_folder_path):
-            raise HTTPException(status_code=404, detail=f"User ID '{user_id}' not found or no uploads exist")
+            return JSONResponse(content={"uploaded_files": {}}, status_code=200)
 
         files_list = os.listdir(user_folder_path)
         
