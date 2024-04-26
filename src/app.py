@@ -78,6 +78,25 @@ async def upload_pdf(
         pdf_processor.extract_and_convert(uploaded_file_path)
 
         pdf_processor_by_pdfid[pdf_file_id] = pdf_processor
+        
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        parent_directory = os.path.dirname(current_directory) 
+        mindmap_folder = os.path.join(parent_directory, f"mindmaps/{user_id}")
+        
+        if not os.path.exists(mindmap_folder):
+            os.makedirs(mindmap_folder)
+    
+        # Save mindmap node list
+        node_list_file_path = os.path.join(mindmap_folder, f"{pdf_file_id}_nodes.json")
+        with open(node_list_file_path, "w") as node_file:
+            json.dump(pdf_processor.nodes, node_file)
+            log_info(f"Node list saved for PDF {pdf_file_id}: {node_list_file_path}")
+
+        # Save mindmap edges list
+        edges_list_file_path = os.path.join(mindmap_folder, f"{pdf_file_id}_edges.json")
+        with open(edges_list_file_path, "w") as edges_file:
+            json.dump(pdf_processor.edges, edges_file)
+            log_info(f"Edges list saved for PDF {pdf_file_id}: {edges_list_file_path}")
 
         return {
             "pdf_id": pdf_file_id,
@@ -117,6 +136,25 @@ async def upload_pdf(
         importlib.reload(backend)
         pdf_processor.extract_and_convert_manual(uploaded_file_path, page_numbers)
         pdf_processor_by_pdfid[pdf_file_id] = pdf_processor
+        
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        parent_directory = os.path.dirname(current_directory) 
+        mindmap_folder = os.path.join(parent_directory, f"mindmaps/{user_id}")
+        
+        if not os.path.exists(mindmap_folder):
+            os.makedirs(mindmap_folder)
+    
+        # Save mindmap node list
+        node_list_file_path = os.path.join(mindmap_folder, f"{pdf_file_id}_nodes.json")
+        with open(node_list_file_path, "w") as node_file:
+            json.dump(pdf_processor.nodes, node_file)
+            log_info(f"Node list saved for PDF {pdf_file_id}: {node_list_file_path}")
+
+        # Save mindmap edges list
+        edges_list_file_path = os.path.join(mindmap_folder, f"{pdf_file_id}_edges.json")
+        with open(edges_list_file_path, "w") as edges_file:
+            json.dump(pdf_processor.edges, edges_file)
+            log_info(f"Edges list saved for PDF {pdf_file_id}: {edges_list_file_path}")
 
         return {
             "pdf_id": pdf_file_id,
@@ -144,21 +182,36 @@ async def get_documents(
     user_id: str = Query(..., description="User ID"),
 ):
     try:
-        uploaded_docs = uploaded_pdfs.get(user_id, [])
-        return {"uploaded_pdfs": uploaded_docs}
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        parent_directory = os.path.dirname(current_directory) 
+        user_upload_folder = f"uploads/{user_id}"
+        user_folder_path = os.path.join(parent_directory, user_upload_folder)
+
+        if not os.path.exists(user_folder_path):
+            raise HTTPException(status_code=404, detail=f"User ID '{user_id}' not found or no uploads exist")
+
+        files_list = os.listdir(user_folder_path)
+        
+        file_objects = {}
+
+        for filename in files_list:
+            
+            file_path = os.path.join(user_folder_path, filename)
+            file_objects[filename] = file_path;
+
+        return JSONResponse(content={"uploaded_files": file_objects}, status_code=200)
     
     except HTTPException as e:
-        log_error("Upload File and Mindmap Creation Failed")
+        log_error("Error retrieving documents")
         log_debug(
-            f"Module Name : {__name__},Function Name : {sys._getframe().f_code.co_name}"
+            f"Module Name: {__name__}, Function Name: {sys._getframe().f_code.co_name}, Error: {str(e)}"
         )
-
         raise e
 
     except Exception as e:
         log_critical("Error in getting documents")
         log_debug(
-            f"Module Name : {__name__}, Function Name : {sys._getframe().f_code.co_name}, Error: {str(e)}"
+            f"Module Name: {__name__}, Function Name: {sys._getframe().f_code.co_name}, Error: {str(e)}"
         )
         raise HTTPException(status_code=500, detail="Error in getting documents")
     
@@ -186,36 +239,41 @@ async def query_response(
 
 @app.get("/mindmapGraph")
 async def mindmap_graph(
+    user_id: str = Query(..., description="User ID"),
     pdf_file_id: str = Query(..., description="Pdf File ID"),
 ):
     try:
-        pdf_processor = pdf_processor_by_pdfid.get(pdf_file_id, None)
-        if pdf_processor:
-            nodes = pdf_processor.nodes
-            edges = pdf_processor.edges
+        
+        nodes_file_path = os.path.join("mindmaps", user_id, f"{pdf_file_id}_nodes.json")
+        edges_file_path = os.path.join("mindmaps", user_id, f"{pdf_file_id}_edges.json")
 
-            log_info(
-                f"Mindmap graph retrieved for PDF {pdf_file_id} - Module: {__name__}",
-            )
+        if not os.path.exists(nodes_file_path) or not os.path.exists(edges_file_path):
+            raise HTTPException(status_code=404, detail=f"Mindmap files not found for PDF {pdf_file_id}")
 
-            return JSONResponse(
-                content={"nodes": nodes, "edges": edges}, status_code=200
-            )
-        else:
-            log_error(
-                f"Mindmap graph not found for PDF {pdf_file_id} - Module: {__name__}",
-            )
-            return JSONResponse(
-                content={"error": "Graph not found for the PDF"}, status_code=404
-            )
+        with open(nodes_file_path, "r") as nodes_file:
+            nodes = json.load(nodes_file)
+
+        with open(edges_file_path, "r") as edges_file:
+            edges = json.load(edges_file)
+
+        log_info(
+            f"Mindmap graph retrieved for PDF {pdf_file_id} - Module: {__name__}",
+        )
+
+        return JSONResponse(
+            content={"nodes": nodes, "edges": edges},
+            status_code=200
+        )
+
+    except HTTPException as e:
+        log_error(f"Error retrieving mindmap graph for PDF {pdf_file_id}: {str(e)}")
+        raise e
+
     except Exception as e:
-        log_error(
-            f"Error retrieving mindmap graph - Module: {__name__}",
-        )
+        log_error(f"Error retrieving mindmap graph for PDF {pdf_file_id}: {str(e)}")
         log_debug(
-            f"Module Name : {__name__},Function Name : {sys._getframe().f_code.co_name}"
+            f"Module Name: {__name__}, Function Name: {sys._getframe().f_code.co_name}"
         )
-        traceback.print_exc()
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
